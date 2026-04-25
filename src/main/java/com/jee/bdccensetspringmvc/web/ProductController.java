@@ -23,9 +23,15 @@ public class ProductController {
     private ProductRepository productRepository;
     @GetMapping("/user/index")
     @PreAuthorize("hasRole('USER')")
-    public String index(Model model) {
-        List<Product> products = productRepository.findAll();
-        model.addAttribute("productList", products);
+    public String index(Model model, 
+                        @RequestParam(name="page", defaultValue = "0") int page,
+                        @RequestParam(name="size", defaultValue = "5") int size,
+                        @RequestParam(name="keyword", defaultValue = "") String keyword) {
+        org.springframework.data.domain.Page<Product> productPage = productRepository.findByNameContains(keyword, org.springframework.data.domain.PageRequest.of(page, size));
+        model.addAttribute("productList", productPage.getContent());
+        model.addAttribute("pages", new int[productPage.getTotalPages()]);
+        model.addAttribute("currentPage", page);
+        model.addAttribute("keyword", keyword);
         return "products";
     }
 
@@ -35,9 +41,9 @@ public class ProductController {
     }
     @PostMapping("/admin/delete")
     @PreAuthorize("hasRole('ADMIN')")
-    public String delete(@RequestParam(name = "id") Long id){
+    public String delete(@RequestParam(name = "id") Long id, String keyword, int page){
         productRepository.deleteById(id);
-        return "redirect:/user/index";
+        return "redirect:/user/index?page=" + page + "&keyword=" + keyword;
     }
     @GetMapping("/admin/newProduct")
     @PreAuthorize("hasRole('ADMIN')")
@@ -47,10 +53,27 @@ public class ProductController {
     }
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/admin/saveProduct")
-    public String saveProduct(@Valid Product product, BindingResult bindingResult, Model model) {
-        if(bindingResult.hasErrors()) return "new-product";
+    public String saveProduct(@Valid Product product, BindingResult bindingResult, Model model,
+                              @RequestParam(name="page", defaultValue="0") int page,
+                              @RequestParam(name="keyword", defaultValue="") String keyword) {
+        if(bindingResult.hasErrors()) {
+            if(product.getId() == null) return "new-product";
+            else return "edit-product";
+        }
         productRepository.save(product);
-        return "redirect:/admin/newProduct";
+        return "redirect:/user/index?page="+page+"&keyword="+keyword;
+    }
+
+    @GetMapping("/admin/editProduct")
+    @PreAuthorize("hasRole('ADMIN')")
+    public String editProduct(Model model, @RequestParam(name = "id") Long id,
+                              @RequestParam(name="page", defaultValue="0") int page,
+                              @RequestParam(name="keyword", defaultValue="") String keyword) {
+        Product product = productRepository.findById(id).orElse(null);
+        model.addAttribute("product", product);
+        model.addAttribute("page", page);
+        model.addAttribute("keyword", keyword);
+        return "edit-product";
     }
     @GetMapping("/notAuthorized")
     public String notAuthorized(){
